@@ -1,7 +1,8 @@
 package com.scavable.amp;
 
 import com.scavable.Main;
-import org.json.JSONArray;
+import com.scavable.amp.methods.GetInstances;
+import com.scavable.amp.methods.Login;
 import org.json.JSONObject;
 
 import javax.net.ssl.HttpsURLConnection;
@@ -11,50 +12,33 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
-import static com.scavable.amp.TwoFactorAuth.getTOTPCode;
-
 public class AMP implements Runnable {
     public static final Properties properties = new Properties();
-    private String coreURL;
-    private String baseURL;
+    private final String coreURL;
+    private final String baseURL;
     public AMP() throws IOException {
         properties.load(Main.class.getClassLoader().getResourceAsStream("app.properties"));
         baseURL = properties.getProperty("baseAMPURL");
         coreURL = baseURL.concat("API/Core/");
 
         try {
-            JSONObject loginInfo = Login();
+            JSONObject loginInfo = Login.Login(properties, coreURL);
             JSONObject sessionID = new JSONObject();
             sessionID.put("SESSIONID", loginInfo.getString("sessionID"));
 
             System.out.println(sessionID);
             GetRoleIDs(sessionID);
-            GetInstances(sessionID);
+
+            GetInstances getInstances = new GetInstances(baseURL, sessionID);
+            getInstances.GetInstances();
+
             Logout(sessionID);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private JSONObject GetInstances(JSONObject sessionID) throws MalformedURLException {
-        JSONObject response;
-        try {
-            response = SendPostRequest(new URL(baseURL.concat("API/ADSModule/GetInstances")), sessionID);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        System.out.println("Get Instances Method Data: "+response);
-        JSONArray result = (JSONArray) response.get("result");
-        JSONObject instances = result.getJSONObject(0);
-        System.out.println(instances.keySet());
-        JSONArray availableInstances = (JSONArray) instances.get("AvailableInstances");
-        for(Object temp : availableInstances){
-            JSONObject object = (JSONObject) temp;
-            System.out.println(object.get("FriendlyName").toString().concat(" - " + object.get("InstanceID").toString()));
-        }
 
-        return response;
-    }
 
     private JSONObject GetRoleIDs(JSONObject sessionID) throws MalformedURLException {
         JSONObject response;
@@ -78,22 +62,7 @@ public class AMP implements Runnable {
         }
     }
 
-    JSONObject Login() throws IOException {
 
-        URL url = new URL(coreURL.concat("Login"));
-
-        JSONObject login = new JSONObject();
-        login.put("username", properties.getProperty("username"));
-        login.put("password", properties.getProperty("password"));
-        login.put("token", getTOTPCode(properties.getProperty("key")));
-        login.put("rememberMe", false);
-
-        JSONObject response = SendPostRequest(url, login);
-
-        System.out.println("Login Method Data: "+response);
-
-        return response;
-    }
 
     public static JSONObject SendPostRequest(URL url, JSONObject jsonObject) throws IOException {
         StringBuilder response;
